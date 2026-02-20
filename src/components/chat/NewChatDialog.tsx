@@ -29,25 +29,41 @@ const NewChatDialog = ({ onClose }: Props) => {
     if (!search.trim() || !user) return;
     setSearching(true);
     try {
-      const q = query(
+      const searchLower = search.trim().toLowerCase();
+      const results: UserResult[] = [];
+
+      // Search by email (exact match)
+      const emailQ = query(
         collection(db, "users"),
-        where("email", "==", search.trim().toLowerCase()),
+        where("email", "==", searchLower),
         limit(10)
       );
-      const snap = await getDocs(q);
-      const users: UserResult[] = [];
-      snap.forEach((doc) => {
+      const emailSnap = await getDocs(emailQ);
+      emailSnap.forEach((doc) => {
         const data = doc.data();
         if (data.uid !== user.uid) {
-          users.push({
-            uid: data.uid,
-            name: data.name,
-            email: data.email,
-            profilePic: data.profilePic || "",
-          });
+          results.push({ uid: data.uid, name: data.name, email: data.email, profilePic: data.profilePic || "" });
         }
       });
-      setResults(users);
+
+      // Search by name (prefix match using >= and < range)
+      if (results.length === 0) {
+        const nameQ = query(
+          collection(db, "users"),
+          where("name", ">=", search.trim()),
+          where("name", "<=", search.trim() + "\uf8ff"),
+          limit(10)
+        );
+        const nameSnap = await getDocs(nameQ);
+        nameSnap.forEach((doc) => {
+          const data = doc.data();
+          if (data.uid !== user.uid && !results.find(r => r.uid === data.uid)) {
+            results.push({ uid: data.uid, name: data.name, email: data.email, profilePic: data.profilePic || "" });
+          }
+        });
+      }
+
+      setResults(results);
     } catch (e) {
       console.error("Search error:", e);
     }
@@ -99,8 +115,8 @@ const NewChatDialog = ({ onClose }: Props) => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
-                type="email"
-                placeholder="Search by email..."
+                type="text"
+                placeholder="Search by name or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
