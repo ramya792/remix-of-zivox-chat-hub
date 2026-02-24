@@ -138,9 +138,9 @@ const NewChatDialog = ({ onClose }: Props) => {
                 Search for a user by their email address
               </p>
             )}
-            {results.map((u) => (
+            {results.map((u, idx) => (
               <button
-                key={u.uid}
+                key={`${u.uid}-${idx}`}
                 onClick={() => handleStartChat(u.uid)}
                 disabled={starting}
                 className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary transition-colors text-left"

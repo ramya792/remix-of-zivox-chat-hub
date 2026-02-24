@@ -16,8 +16,13 @@ import {
   type DocumentData,
   setDoc,
   deleteDoc,
+  getDoc,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { chatImageToBase64, fileToBase64Checked } from "@/lib/imageUtils";
 
 export interface Message {
   id: string;
@@ -50,6 +55,10 @@ export interface Chat {
     profilePic: string;
     onlineStatus: boolean;
     lastSeen: any;
+    bio?: string;
+    email?: string;
+    lastSeenVisibility?: string;
+    onlineStatusVisible?: boolean;
   };
 }
 
@@ -69,12 +78,15 @@ interface ChatState {
   setActiveChat: (chat: Chat | null) => void;
   subscribeMessages: (chatId: string) => void;
   sendMessage: (chatId: string, senderId: string, text: string) => Promise<void>;
+  sendMediaMessage: (chatId: string, senderId: string, file: File, mediaType: "image" | "video" | "audio") => Promise<void>;
   loadMoreMessages: (chatId: string) => Promise<void>;
   setTyping: (chatId: string, uid: string, isTyping: boolean) => void;
   startChat: (currentUid: string, otherUid: string) => Promise<string>;
   deleteMessage: (chatId: string, messageId: string, forEveryone: boolean) => Promise<void>;
   editMessage: (chatId: string, messageId: string, newText: string) => Promise<void>;
   addReaction: (chatId: string, messageId: string, uid: string, emoji: string) => Promise<void>;
+  muteChat: (chatId: string, uid: string, mute: boolean) => Promise<void>;
+  clearChat: (chatId: string) => Promise<void>;
   cleanup: () => void;
 }
 
@@ -97,46 +109,66 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const q = query(
       collection(db, "chats"),
-      where("members", "array-contains", uid),
-      orderBy("lastMessageTime", "desc"),
-      limit(30)
+      where("members", "array-contains", uid)
     );
 
     const unsub = onSnapshot(q, async (snap) => {
-      const chats: Chat[] = [];
-      for (const d of snap.docs) {
-        const data = d.data();
-        const chat: Chat = {
-          id: d.id,
-          type: data.type || "private",
-          members: data.members || [],
-          lastMessage: data.lastMessage || "",
-          lastMessageTime: data.lastMessageTime,
-          pinnedBy: data.pinnedBy || [],
-          mutedBy: data.mutedBy || [],
-          createdAt: data.createdAt,
-        };
+      try {
+        const chats: Chat[] = [];
+        for (const d of snap.docs) {
+          const data = d.data();
+          const chat: Chat = {
+            id: d.id,
+            type: data.type || "private",
+            members: data.members || [],
+            lastMessage: data.lastMessage || "",
+            lastMessageTime: data.lastMessageTime,
+            pinnedBy: data.pinnedBy || [],
+            mutedBy: data.mutedBy || [],
+            createdAt: data.createdAt,
+          };
 
-        if (chat.type === "private") {
-          const otherUid = chat.members.find((m) => m !== uid);
-          if (otherUid) {
-            const { getDoc } = await import("firebase/firestore");
-            const userSnap = await getDoc(doc(db, "users", otherUid));
-            if (userSnap.exists()) {
-              const u = userSnap.data();
-              chat.otherUser = {
-                uid: otherUid,
-                name: u.name || "User",
-                profilePic: u.profilePic || "",
-                onlineStatus: u.onlineStatus || false,
-                lastSeen: u.lastSeen,
-              };
+          if (chat.type === "private") {
+            const otherUid = chat.members.find((m) => m !== uid);
+            if (otherUid) {
+              try {
+                const userSnap = await getDoc(doc(db, "users", otherUid));
+                if (userSnap.exists()) {
+                  const u = userSnap.data();
+                  chat.otherUser = {
+                    uid: otherUid,
+                    name: u.name || "User",
+                    profilePic: u.profilePic || "",
+                    onlineStatus: u.onlineStatus || false,
+                    lastSeen: u.lastSeen,
+                    bio: u.bio || "",
+                    email: u.email || "",
+                    lastSeenVisibility: u.lastSeenVisibility || "everyone",
+                    onlineStatusVisible: u.onlineStatusVisible !== false,
+                  };
+                }
+              } catch {
+                chat.otherUser = { uid: otherUid, name: "User", profilePic: "", onlineStatus: false, lastSeen: null };
+              }
             }
           }
+          chats.push(chat);
         }
-        chats.push(chat);
+        chats.sort((a, b) => {
+          const ta = a.lastMessageTime?.toMillis?.() || 0;
+          const tb = b.lastMessageTime?.toMillis?.() || 0;
+          return tb - ta;
+        });
+        const { activeChat: current } = get();
+        const updatedActive = current ? chats.find(c => c.id === current.id) || current : null;
+        set({ chats, loadingChats: false, activeChat: updatedActive });
+      } catch (err) {
+        console.error("Error processing chats:", err);
+        set({ loadingChats: false });
       }
-      set({ chats, loadingChats: false });
+    }, (error) => {
+      console.error("Chat subscription error:", error);
+      set({ loadingChats: false });
     });
 
     set({ chatListUnsub: unsub });
@@ -174,6 +206,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastMessageDoc: last,
         hasMoreMessages: snap.docs.length === 30,
       });
+    }, (error) => {
+      console.error("Messages subscription error:", error);
+      set({ loadingMessages: false });
     });
 
     set({ messageUnsub: unsub });
@@ -193,6 +228,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     await updateDoc(doc(db, "chats", chatId), {
       lastMessage: text.trim(),
+      lastMessageTime: serverTimestamp(),
+    });
+  },
+
+  sendMediaMessage: async (chatId, senderId, file, mediaType) => {
+    let mediaUrl = "";
+    
+    if (mediaType === "image") {
+      // Convert image to base64 data URL with auto-compression to stay under Firestore limit
+      mediaUrl = await chatImageToBase64(file);
+    } else if (mediaType === "audio") {
+      // Convert audio to base64, reject if too large
+      mediaUrl = await fileToBase64Checked(file);
+    } else if (mediaType === "video") {
+      // Videos must be small enough to fit in a Firestore field
+      if (file.size > 3 * 1024 * 1024) {
+        throw new Error("Video too large. Max ~3MB.");
+      }
+      mediaUrl = await fileToBase64Checked(file);
+    }
+
+    const label = mediaType === "image" ? "📷 Photo" : mediaType === "video" ? "🎥 Video" : "🎤 Voice message";
+
+    await addDoc(collection(db, "chats", chatId, "messages"), {
+      senderId,
+      text: "",
+      mediaUrl,
+      mediaType,
+      seenBy: [senderId],
+      deliveredTo: [senderId],
+      reactions: {},
+      edited: false,
+      deletedForEveryone: false,
+      timestamp: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "chats", chatId), {
+      lastMessage: label,
       lastMessageTime: serverTimestamp(),
     });
   },
@@ -277,6 +349,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await updateDoc(msgRef, {
       [`reactions.${uid}`]: emoji,
     });
+  },
+
+  muteChat: async (chatId, uid, mute) => {
+    const chatRef = doc(db, "chats", chatId);
+    if (mute) {
+      await updateDoc(chatRef, { mutedBy: arrayUnion(uid) });
+    } else {
+      await updateDoc(chatRef, { mutedBy: arrayRemove(uid) });
+    }
+  },
+
+  clearChat: async (chatId) => {
+    const msgsCol = collection(db, "chats", chatId, "messages");
+    const snap = await getDocs(msgsCol);
+    const b = writeBatch(db);
+    snap.docs.forEach((d) => b.delete(d.ref));
+    await b.commit();
+    await updateDoc(doc(db, "chats", chatId), {
+      lastMessage: "",
+      lastMessageTime: serverTimestamp(),
+    });
+    set({ messages: [] });
   },
 
   cleanup: () => {

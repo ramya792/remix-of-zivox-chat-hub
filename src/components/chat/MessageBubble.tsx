@@ -1,18 +1,19 @@
 import { memo, useState } from "react";
 import { useChatStore, type Message } from "@/stores/chatStore";
 import { useAuthStore } from "@/stores/authStore";
-import { Check, CheckCheck, MoreHorizontal, Pencil, Trash2, Reply, Copy } from "lucide-react";
+import { Check, CheckCheck, MoreHorizontal, Pencil, Trash2, Reply, Copy, Play } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
   message: Message;
   isOwn: boolean;
   chatId: string;
+  fontSize?: "small" | "medium" | "large";
 }
 
 const emojis = ["❤️", "😂", "😮", "😢", "🙏", "👍"];
 
-const MessageBubble = memo(({ message, isOwn, chatId }: Props) => {
+const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
   const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const { deleteMessage, editMessage, addReaction } = useChatStore();
@@ -50,13 +51,40 @@ const MessageBubble = memo(({ message, isOwn, chatId }: Props) => {
     >
       <div className="max-w-[80%] md:max-w-[65%] relative">
         <div
-          className={`px-3.5 py-2 text-sm leading-relaxed ${
+          className={`px-3.5 py-2 leading-relaxed ${
+            fontSize === "large" ? "text-base" : fontSize === "small" ? "text-xs" : "text-sm"
+          } ${
             isOwn
               ? "bg-chat-bubble-own text-chat-bubble-own-foreground rounded-2xl rounded-br-md"
               : "bg-chat-bubble-other text-chat-bubble-other-foreground rounded-2xl rounded-bl-md"
           }`}
         >
-          <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          {/* Media content */}
+          {message.mediaUrl && message.mediaType === "image" && (
+            <div className="mb-1 -mx-1.5 -mt-0.5 overflow-hidden rounded-xl">
+              <img
+                src={message.mediaUrl}
+                alt="Shared photo"
+                className="max-w-full max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => window.open(message.mediaUrl, "_blank")}
+              />
+            </div>
+          )}
+          {message.mediaUrl && message.mediaType === "video" && (
+            <div className="mb-1 -mx-1.5 -mt-0.5 overflow-hidden rounded-xl">
+              <video
+                src={message.mediaUrl}
+                controls
+                className="max-w-full max-h-64 rounded-xl"
+              />
+            </div>
+          )}
+          {message.mediaUrl && message.mediaType === "audio" && (
+            <div className="mb-1 min-w-[200px]">
+              <audio src={message.mediaUrl} controls className="w-full h-8" />
+            </div>
+          )}
+          {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
           <div className={`flex items-center gap-1 mt-1 ${isOwn ? "justify-end" : "justify-start"}`}>
             {message.edited && (
               <span className="text-[10px] opacity-60">edited</span>

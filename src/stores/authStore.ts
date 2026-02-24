@@ -6,10 +6,15 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
   type User,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
+import { profilePicToBase64 } from "@/lib/imageUtils";
 
 interface UserProfile {
   uid: string;
@@ -19,6 +24,34 @@ interface UserProfile {
   bio: string;
   onlineStatus: boolean;
   lastSeen: any;
+  // Privacy settings
+  lastSeenVisibility?: "everyone" | "contacts" | "nobody";
+  onlineStatusVisible?: boolean;
+  profilePhotoVisibility?: "everyone" | "contacts" | "nobody";
+  aboutVisibility?: "everyone" | "contacts" | "nobody";
+  readReceipts?: boolean;
+  groupsAddMe?: "everyone" | "contacts" | "nobody";
+  // Chat settings
+  enterIsSend?: boolean;
+  fontSize?: "small" | "medium" | "large";
+  archivedChats?: "keep" | "auto";
+  // Notification settings
+  muteAll?: boolean;
+  messageSound?: boolean;
+  messageVibrate?: boolean;
+  messagePopup?: boolean;
+  groupNotifications?: boolean;
+  callNotifications?: boolean;
+  // Data settings
+  autoDownloadWifi?: boolean;
+  autoDownloadMobile?: boolean;
+  dataSaver?: boolean;
+  // Status settings
+  statusVisibility?: "everyone" | "contacts" | "nobody";
+  statusAutoDelete?: boolean;
+  // Appearance
+  darkMode?: boolean;
+  appLanguage?: string;
 }
 
 interface AuthState {
@@ -31,6 +64,10 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  updateUserProfile: (data: Partial<Omit<UserProfile, "uid" | "email">>) => Promise<void>;
+  updateProfilePic: (file: File) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   clearError: () => void;
   init: () => () => void;
 }
@@ -104,6 +141,47 @@ export const useAuthStore = create<AuthState>((set) => ({
       await setDoc(doc(db, "users", user.uid), { onlineStatus: false, lastSeen: serverTimestamp() }, { merge: true });
     }
     await signOut(auth);
+    set({ user: null, profile: null });
+  },
+
+  updateUserProfile: async (data) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, { ...data, updatedAt: serverTimestamp() });
+    if (data.name) {
+      await updateProfile(user, { displayName: data.name });
+    }
+    // Force profile refresh from Firestore
+    const snap = await getDoc(userRef);
+    set({ profile: { ...snap.data() } as UserProfile });
+  },
+
+  updateProfilePic: async (file) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Not logged in");
+    // Convert to base64 data URL (no Firebase Storage, no CORS issues)
+    const dataUrl = await profilePicToBase64(file);
+    await updateDoc(doc(db, "users", user.uid), { profilePic: dataUrl, updatedAt: serverTimestamp() });
+    // Don't set photoURL on Firebase Auth — base64 data URLs are too long for Auth profile
+    const snap = await getDoc(doc(db, "users", user.uid));
+    set({ profile: snap.data() as UserProfile });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw new Error("No user");
+    const cred = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, cred);
+    await updatePassword(user, newPassword);
+  },
+
+  deleteAccount: async (password) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw new Error("No user");
+    const cred = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, cred);
+    await deleteUser(user);
     set({ user: null, profile: null });
   },
 

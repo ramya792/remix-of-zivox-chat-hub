@@ -127,7 +127,7 @@ const ChatSidebar = memo(({ onChatSelect }: Props) => {
                     </span>
                   )}
                 </div>
-                {chat.otherUser?.onlineStatus && (
+                {chat.otherUser?.onlineStatus && chat.otherUser?.onlineStatusVisible !== false && (
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-online rounded-full border-2 border-background" />
                 )}
               </div>
