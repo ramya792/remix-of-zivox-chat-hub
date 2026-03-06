@@ -52,7 +52,7 @@ const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
       <div className="max-w-[80%] md:max-w-[65%] relative">
         <div
           className={`px-3.5 py-2 leading-relaxed ${
-            fontSize === "large" ? "text-base" : fontSize === "small" ? "text-xs" : "text-sm"
+            fontSize === "large" ? "text-[18px]" : fontSize === "small" ? "text-[12px]" : "text-[14px]"
           } ${
             isOwn
               ? "bg-chat-bubble-own text-chat-bubble-own-foreground rounded-2xl rounded-br-md"
@@ -87,15 +87,15 @@ const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
           {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
           <div className={`flex items-center gap-1 mt-1 ${isOwn ? "justify-end" : "justify-start"}`}>
             {message.edited && (
-              <span className="text-[10px] opacity-60">edited</span>
+              <span className={`opacity-60 ${fontSize === "large" ? "text-[12px]" : "text-[10px]"}`}>edited</span>
             )}
-            <span className="text-[10px] opacity-60">{formatTime(message.timestamp)}</span>
+            <span className={`opacity-60 ${fontSize === "large" ? "text-[12px]" : "text-[10px]"}`}>{formatTime(message.timestamp)}</span>
             {isOwn && (
               <span className="opacity-60">
                 {message.seenBy?.length > 1 ? (
-                  <CheckCheck className="w-3 h-3 text-accent" />
+                  <CheckCheck className={`${fontSize === "large" ? "w-4 h-4" : "w-3 h-3"} text-accent`} />
                 ) : (
-                  <Check className="w-3 h-3" />
+                  <Check className={fontSize === "large" ? "w-4 h-4" : "w-3 h-3"} />
                 )}
               </span>
             )}

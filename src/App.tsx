@@ -36,13 +36,22 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppInit = ({ children }: { children: React.ReactNode }) => {
-  const init = useAuthStore((s) => s.init);
+  const { profile, init } = useAuthStore();
+  
   useEffect(() => {
-    // Apply dark mode
-    document.documentElement.classList.add("dark");
     const unsub = init();
     return unsub;
   }, [init]);
+
+  useEffect(() => {
+    // Apply dark mode based on profile setting
+    if (profile?.darkMode !== false) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [profile?.darkMode]);
+
   return <>{children}</>;
 };
 

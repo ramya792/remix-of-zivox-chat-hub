@@ -1,20 +1,22 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import {
   User, Camera, Edit3, Phone, Mail, QrCode, Key, Trash2, LogOut, Shield, Eye, EyeOff,
   Lock, Smartphone, Fingerprint, MessageSquare, Palette, Type, Image, Archive,
   Database, Bell, BellOff, Volume2, Vibrate, Download, Wifi, HardDrive, Radio,
   Clock, Info, FileText, Code, HelpCircle, Bug, HeadphonesIcon, Moon, Sun,
-  ChevronRight, Globe, Paintbrush, ArrowLeft, Check, X, Save
+  ChevronRight, Globe, Paintbrush, ArrowLeft, Check, X, Save,
+  Users, Megaphone, Accessibility, UserCircle, CircleDashed, Search
 } from "lucide-react";
 
 type PrivacyOption = "everyone" | "contacts" | "nobody";
-type SectionId = "profile" | "account" | "privacy" | "security" | "chats" | "notifications" | "storage" | "status" | "appearance" | "help" | "about" | null;
+type SectionId = "profile" | "account" | "privacy" | "avatar" | "lists" | "chats" | "broadcasts" | "notifications" | "storage" | "accessibility" | "language" | "help" | "about" | "tos" | "privacy_policy" | "licenses" | null;
 
 const SettingsPage = () => {
   const { profile, logout, updateUserProfile, updateProfilePic, changePassword, deleteAccount } = useAuthStore();
   const [activeSection, setActiveSection] = useState<SectionId>(null);
   const profilePicRef = useRef<HTMLInputElement>(null);
+  const wallpaperRef = useRef<HTMLInputElement>(null);
 
   // Editable profile fields
   const [editName, setEditName] = useState(profile?.name || "");
@@ -58,12 +60,50 @@ const SettingsPage = () => {
     statusAutoDelete: profile?.statusAutoDelete !== false,
     darkMode: profile?.darkMode !== false,
     appLanguage: profile?.appLanguage || "English",
+    wallpaper: profile?.wallpaper || "#0b141a",
   });
+
+  // Sync settings state with profile updates
+  useEffect(() => {
+    if (profile) {
+      setSettings({
+        lastSeen: (profile.lastSeenVisibility || "everyone") as PrivacyOption,
+        onlineStatus: profile.onlineStatusVisible !== false,
+        profilePhoto: (profile.profilePhotoVisibility || "everyone") as PrivacyOption,
+        about: (profile.aboutVisibility || "everyone") as PrivacyOption,
+        readReceipts: profile.readReceipts !== false,
+        groupsAddMe: (profile.groupsAddMe || "everyone") as PrivacyOption,
+        enterIsSend: profile.enterIsSend !== false,
+        fontSize: (profile.fontSize || "medium") as "small" | "medium" | "large",
+        archivedChats: (profile.archivedChats || "keep") as "keep" | "auto",
+        messageSound: profile.messageSound !== false,
+        messageVibrate: profile.messageVibrate !== false,
+        messagePopup: profile.messagePopup !== false,
+        groupNotifications: profile.groupNotifications !== false,
+        callNotifications: profile.callNotifications !== false,
+        muteAll: profile.muteAll === true,
+        autoDownloadWifi: profile.autoDownloadWifi !== false,
+        autoDownloadMobile: profile.autoDownloadMobile === true,
+        dataSaver: profile.dataSaver === true,
+        statusVisibility: (profile.statusVisibility || "everyone") as PrivacyOption,
+        statusAutoDelete: profile.statusAutoDelete !== false,
+        darkMode: profile.darkMode !== false,
+        appLanguage: profile.appLanguage || "English",
+        wallpaper: profile.wallpaper || "#0b141a",
+      });
+    }
+  }, [profile]);
 
   // Helper: update local state + persist to Firestore
   const updateSetting = (localKey: string, firestoreKey: string, value: any) => {
     setSettings(s => ({ ...s, [localKey]: value }));
     updateUserProfile({ [firestoreKey]: value } as any).catch(err => console.error("Setting save error:", err));
+  };
+
+  const { updateWallpaper } = useAuthStore();
+  const handleWallpaperSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) updateWallpaper(file).catch(err => alert("Failed to upload wallpaper: " + err.message));
   };
 
   // Error state
@@ -143,68 +183,6 @@ const SettingsPage = () => {
   };
 
   const goBack = () => setActiveSection(null);
-
-  // Reusable components
-  const Toggle = ({ label, value, onChange, description }: { label: string; value: boolean; onChange: (v: boolean) => void; description?: string }) => (
-    <div className="flex items-center justify-between py-3 px-4">
-      <div className="flex-1 min-w-0 mr-3">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 ${value ? "bg-primary" : "bg-muted"}`}
-      >
-        <div className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform ${value ? "translate-x-[22px]" : "translate-x-0.5"}`} />
-      </button>
-    </div>
-  );
-
-  const SelectOption = ({ label, value, options, onChange }: {
-    label: string; value: string; options: { label: string; value: string }[]; onChange: (v: any) => void;
-  }) => (
-    <div className="py-3 px-4">
-      <span className="text-sm text-foreground block mb-2.5">{label}</span>
-      <div className="flex flex-col gap-1">
-        {options.map((opt) => (
-          <label
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
-              value === opt.value ? "bg-primary/10" : "hover:bg-secondary/60"
-            }`}
-          >
-            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-              value === opt.value ? "border-primary" : "border-muted-foreground/40"
-            }`}>
-              {value === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-            </div>
-            <span className={`text-sm ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-
-  const MenuItem = ({ icon: Icon, label, onClick, danger, detail }: { icon: any; label: string; onClick?: () => void; danger?: boolean; detail?: string }) => (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 py-3 px-4 hover:bg-secondary/60 active:bg-secondary/80 transition-colors text-left ${danger ? "text-destructive" : ""}`}
-    >
-      <Icon className={`w-5 h-5 flex-shrink-0 ${danger ? "" : "text-muted-foreground"}`} />
-      <span className={`text-sm flex-1 ${danger ? "" : "text-foreground"}`}>{label}</span>
-      {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
-    </button>
-  );
-
-  const PanelHeader = ({ title, onBack: onBackClick }: { title: string; onBack: () => void }) => (
-    <div className="flex items-center gap-3 px-4 py-4 border-b border-border sticky top-0 bg-background z-10">
-      <button onClick={onBackClick} className="p-1 rounded-lg hover:bg-secondary transition-colors text-muted-foreground">
-        <ArrowLeft className="w-5 h-5" />
-      </button>
-      <h2 className="text-lg font-bold text-foreground">{title}</h2>
-    </div>
-  );
 
   // Section content renderers
   const renderProfile = () => (
@@ -366,17 +344,171 @@ const SettingsPage = () => {
   );
 
   const renderPrivacy = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background">
       <PanelHeader title="Privacy" onBack={goBack} />
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <SelectOption label="Last seen" value={settings.lastSeen} options={[{label:"Everyone",value:"everyone"},{label:"Contacts",value:"contacts"},{label:"Nobody",value:"nobody"}]} onChange={(v) => updateSetting("lastSeen", "lastSeenVisibility", v)} />
-        <Toggle label="Online status" value={settings.onlineStatus} onChange={(v) => updateSetting("onlineStatus", "onlineStatusVisible", v)} description="Show when you're online" />
-        <div className="border-t border-border" />
-        <SelectOption label="Profile photo visible to" value={settings.profilePhoto} options={[{label:"Everyone",value:"everyone"},{label:"Contacts",value:"contacts"},{label:"Nobody",value:"nobody"}]} onChange={(v) => updateSetting("profilePhoto", "profilePhotoVisibility", v)} />
-        <SelectOption label="About visible to" value={settings.about} options={[{label:"Everyone",value:"everyone"},{label:"Contacts",value:"contacts"},{label:"Nobody",value:"nobody"}]} onChange={(v) => updateSetting("about", "aboutVisibility", v)} />
-        <div className="border-t border-border" />
-        <Toggle label="Read receipts" value={settings.readReceipts} onChange={(v) => updateSetting("readReceipts", "readReceipts", v)} description="Show blue ticks when messages are read" />
-        <SelectOption label="Who can add me to groups" value={settings.groupsAddMe} options={[{label:"Everyone",value:"everyone"},{label:"Contacts",value:"contacts"},{label:"Nobody",value:"nobody"}]} onChange={(v) => updateSetting("groupsAddMe", "groupsAddMe", v)} />
+        <div className="px-4 py-3">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see my personal info</p>
+        </div>
+        
+        <MenuItem 
+          label="Last seen and online" 
+          detail={settings.lastSeen.charAt(0).toUpperCase() + settings.lastSeen.slice(1)} 
+          onClick={() => openSection("last_seen")} 
+        />
+        <MenuItem 
+          label="Profile picture" 
+          detail={settings.profilePhoto === "everyone" ? "Everyone" : settings.profilePhoto === "contacts" ? "My contacts" : "Nobody"} 
+          onClick={() => openSection("profile_pic_privacy")} 
+        />
+        <MenuItem 
+          label="About" 
+          detail={settings.about === "everyone" ? "Everyone" : settings.about === "contacts" ? "My contacts" : "Nobody"} 
+          onClick={() => openSection("about_privacy")} 
+        />
+        <MenuItem 
+          label="Status" 
+          detail={settings.statusVisibility === "everyone" ? "Everyone" : settings.statusVisibility === "contacts" ? "My contacts" : "Nobody"} 
+          onClick={() => openSection("status_privacy")} 
+        />
+
+        <div className="border-t border-border mt-2" />
+        
+        <Toggle 
+          label="Read receipts" 
+          value={settings.readReceipts} 
+          onChange={(v) => updateSetting("readReceipts", "readReceipts", v)} 
+          description="If turned off, you won't send or receive Read receipts. Read receipts are always sent for group chats." 
+        />
+
+        <div className="border-t border-border mt-2" />
+        <div className="px-4 py-3">
+          <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">Disappearing messages</p>
+        </div>
+        <MenuItem label="Default message timer" detail="Off" />
+        <p className="px-4 text-[12px] text-muted-foreground pb-3 leading-snug">Start new chats with disappearing messages set to your timer</p>
+        
+        <div className="border-t border-border mt-2" />
+        <MenuItem label="Groups" detail="Everyone" />
+        <MenuItem label="Live location" detail="None" />
+        <MenuItem label="Calls" detail="Silence unknown callers" />
+        <MenuItem label="Blocked contacts" detail="None" />
+        <MenuItem label="App lock" detail="Disabled" />
+      </div>
+    </div>
+  );
+
+  const renderLastSeen = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Last seen and online" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see my last seen</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.lastSeen} 
+          options={[
+            {label: "Everyone", value: "everyone"},
+            {label: "My contacts", value: "contacts"},
+            {label: "My contacts except...", value: "except"},
+            {label: "Nobody", value: "nobody"}
+          ]} 
+          onChange={(v) => updateSetting("lastSeen", "lastSeenVisibility", v)} 
+        />
+        
+        <div className="border-t border-border mt-4" />
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see when I'm online</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.onlineStatus ? "everyone" : "same"} 
+          options={[
+            {label: "Everyone", value: "everyone"},
+            {label: "Same as last seen", value: "same"}
+          ]} 
+          onChange={(v) => updateSetting("onlineStatus", "onlineStatusVisible", v === "everyone")} 
+        />
+        <p className="px-4 py-4 text-[13px] text-muted-foreground leading-relaxed">
+          If you don't share when you were last seen or online, you won't be able to see when other people were last seen or online.
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderProfilePicPrivacy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Profile picture" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see my profile picture</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.profilePhoto} 
+          options={[
+            {label: "Everyone", value: "everyone"},
+            {label: "My contacts", value: "contacts"},
+            {label: "My contacts except...", value: "except"},
+            {label: "Nobody", value: "nobody"}
+          ]} 
+          onChange={(v) => updateSetting("profilePhoto", "profilePhotoVisibility", v)} 
+        />
+      </div>
+    </div>
+  );
+
+  const renderAboutPrivacy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="About" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see my About</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.about} 
+          options={[
+            {label: "Everyone", value: "everyone"},
+            {label: "My contacts", value: "contacts"},
+            {label: "My contacts except...", value: "except"},
+            {label: "Nobody", value: "nobody"}
+          ]} 
+          onChange={(v) => updateSetting("about", "aboutVisibility", v)} 
+        />
+      </div>
+    </div>
+  );
+
+  const renderStatusPrivacy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Status privacy" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can see my status updates</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.statusVisibility} 
+          options={[
+            {label: "My contacts", value: "contacts"},
+            {label: "My contacts except...", value: "except"},
+            {label: "Only share with...", value: "everyone"} // Mapping for demo
+          ]} 
+          onChange={(v) => updateSetting("statusVisibility", "statusVisibility", v)} 
+        />
+
+        <div className="border-t border-border mt-6" />
+        <Toggle 
+          label="Allow sharing" 
+          value={settings.statusAutoDelete} 
+          onChange={(v) => updateSetting("statusAutoDelete", "statusAutoDelete", v)} 
+          description="Let people who can see your status reshare and forward it."
+        />
+        <p className="px-4 py-4 text-[13px] text-muted-foreground leading-relaxed">
+          Changes to your privacy settings won't affect status updates that you shared already.
+        </p>
       </div>
     </div>
   );
@@ -404,7 +536,27 @@ const SettingsPage = () => {
         <div className="border-t border-border" />
         <SelectOption label="Font size" value={settings.fontSize} options={[{label:"Small",value:"small"},{label:"Medium",value:"medium"},{label:"Large",value:"large"}]} onChange={(v) => updateSetting("fontSize", "fontSize", v)} />
         <div className="border-t border-border" />
-        <MenuItem icon={Palette} label="Chat wallpaper" />
+        <SelectOption 
+          label="Chat wallpaper" 
+          value={settings.wallpaper} 
+          options={[
+            {label:"Default Dark", value:"#0b141a"}, 
+            {label:"Teal Green", value:"#075e54"}, 
+            {label:"Deep Blue", value:"#054d80"},
+            {label:"Dark Grey", value:"#1a1d21"},
+            {label:"Burgundy", value:"#4a0e0e"}
+          ]} 
+          onChange={(v) => updateSetting("wallpaper", "wallpaper", v)} 
+        />
+        <div className="px-4 pb-4">
+          <input ref={wallpaperRef} type="file" accept="image/*" onChange={handleWallpaperSelect} className="hidden" />
+          <button 
+            onClick={() => wallpaperRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-primary font-medium text-sm transition-colors border border-border/50"
+          >
+            <Image className="w-4 h-4" /> Choose from Gallery
+          </button>
+        </div>
         <SelectOption label="Archived chats" value={settings.archivedChats} options={[{label:"Keep archived",value:"keep"},{label:"Auto unarchive",value:"auto"}]} onChange={(v) => updateSetting("archivedChats", "archivedChats", v)} />
         <div className="border-t border-border" />
         <MenuItem icon={Database} label="Chat backup" />
@@ -465,7 +617,12 @@ const SettingsPage = () => {
         <div className="border-t border-border" />
         <MenuItem icon={Palette} label="Theme color" detail="Green" />
         <MenuItem icon={Type} label="Font style" detail="Default" />
-        <MenuItem icon={Globe} label="Language" detail={settings.appLanguage} />
+        <SelectOption 
+          label="App Language" 
+          value={settings.appLanguage} 
+          options={[{label:"English", value:"English"}, {label:"Spanish", value:"Spanish"}]} 
+          onChange={(v) => updateSetting("appLanguage", "appLanguage", v)} 
+        />
       </div>
     </div>
   );
@@ -497,13 +654,62 @@ const SettingsPage = () => {
           <p className="text-xs text-muted-foreground mt-1">Version 1.0.0</p>
         </div>
         <div className="border-t border-border" />
-        <MenuItem icon={FileText} label="Terms of Service" />
-        <MenuItem icon={Shield} label="Privacy Policy" />
-        <MenuItem icon={FileText} label="Open source licenses" />
+        <MenuItem icon={FileText} label="Terms of Service" onClick={() => openSection("tos")} />
+        <MenuItem icon={Shield} label="Privacy Policy" onClick={() => openSection("privacy_policy")} />
+        <MenuItem icon={FileText} label="Open source licenses" onClick={() => openSection("licenses")} />
         <div className="border-t border-border" />
         <div className="px-4 py-4">
           <p className="text-xs text-muted-foreground text-center">Made by Ramya</p>
           <p className="text-xs text-muted-foreground text-center mt-1">© 2026 ZIVOX. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTOS = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Terms of Service" onBack={() => openSection("about")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">1. Agreement to Terms</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">By accessing or using ZIVOX, you agree to be bound by these terms. If you do not agree, please do not use the service.</p>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">2. User Conduct</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">You agree not to use ZIVOX for any unlawful purpose or to engage in any conduct that harms other users or the service itself.</p>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">3. Data Usage</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">ZIVOX uses end-to-end encryption for your messages. We do not store your private conversations on our servers in an unencrypted format.</p>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">4. Account Responsibility</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">You are responsible for maintaining the confidentiality of your account and for all activities that occur under your account.</p>
+      </div>
+    </div>
+  );
+
+  const renderPrivacyPolicy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Privacy Policy" onBack={() => openSection("about")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Information We Collect</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">We collect minimal information to provide the service, including your phone number (if applicable), name, and basic profile info.</p>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Security</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">Your privacy is our priority. We use Firebase and other secure technologies to protect your data.</p>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Your Rights</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">You have the right to delete your account and all associated data at any time through the settings in this app.</p>
+      </div>
+    </div>
+  );
+
+  const renderLicenses = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Open Source Licenses" onBack={() => openSection("about")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <p className="p-4 text-xs text-muted-foreground">ZIVOX is built with the following open-source software:</p>
+        <div className="border-t border-border" />
+        <MenuItem label="React" detail="MIT License" />
+        <MenuItem label="Tailwind CSS" detail="MIT License" />
+        <MenuItem label="Lucide React" detail="ISC License" />
+        <MenuItem label="Framer Motion" detail="MIT License" />
+        <MenuItem label="Firebase" detail="Apache 2.0" />
+        <MenuItem label="Zustand" detail="MIT License" />
+        <div className="p-4 text-[10px] text-muted-foreground">
+          Detailed license info available on our GitHub repository.
         </div>
       </div>
     </div>
@@ -514,36 +720,48 @@ const SettingsPage = () => {
       case "profile": return renderProfile();
       case "account": return renderAccount();
       case "privacy": return renderPrivacy();
-      case "security": return renderSecurity();
+      case "last_seen": return renderLastSeen();
+      case "profile_pic_privacy": return renderProfilePicPrivacy();
+      case "about_privacy": return renderAboutPrivacy();
+      case "status_privacy": return renderStatusPrivacy();
+      case "avatar": return <div className="flex flex-col h-full"><PanelHeader title="Avatar" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Avatar settings coming soon...</div></div>;
+      case "lists": return <div className="flex flex-col h-full"><PanelHeader title="Lists" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Manage your people and groups here...</div></div>;
       case "chats": return renderChats();
+      case "broadcasts": return <div className="flex flex-col h-full"><PanelHeader title="Broadcasts" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Broadcast lists coming soon...</div></div>;
       case "notifications": return renderNotifications();
       case "storage": return renderStorage();
-      case "status": return renderStatusSettings();
-      case "appearance": return renderAppearance();
+      case "accessibility": return <div className="flex flex-col h-full"><PanelHeader title="Accessibility" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Accessibility options coming soon...</div></div>;
+      case "language": return <div className="flex flex-col h-full"><PanelHeader title="App Language" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Language settings...</div></div>;
       case "help": return renderHelp();
       case "about": return renderAbout();
+      case "tos": return renderTOS();
+      case "privacy_policy": return renderPrivacyPolicy();
+      case "licenses": return renderLicenses();
       default: return null;
     }
   };
 
-  const sections: { id: SectionId; icon: any; label: string }[] = [
-    { id: "profile", icon: User, label: "Profile" },
-    { id: "account", icon: Key, label: "Account" },
-    { id: "privacy", icon: Shield, label: "Privacy" },
-    { id: "security", icon: Lock, label: "Security" },
-    { id: "chats", icon: MessageSquare, label: "Chats" },
-    { id: "notifications", icon: Bell, label: "Notifications" },
-    { id: "storage", icon: HardDrive, label: "Storage & Data" },
-    { id: "status", icon: Radio, label: "Status / Stories" },
-    { id: "appearance", icon: Paintbrush, label: "Appearance" },
-    { id: "help", icon: HelpCircle, label: "Help" },
-    { id: "about", icon: Info, label: "About ZIVOX" },
+  const sections: { id: SectionId; icon: any; label: string; detail: string }[] = [
+    { id: "account", icon: Key, label: "Account", detail: "Security notifications, change number" },
+    { id: "privacy", icon: Lock, label: "Privacy", detail: "Block contacts, disappearing messages" },
+    { id: "avatar", icon: UserCircle, label: "Avatar", detail: "Create, edit, profile photo" },
+    { id: "lists", icon: Users, label: "Lists", detail: "Manage people and groups" },
+    { id: "chats", icon: MessageSquare, label: "Chats", detail: "Theme, wallpapers, chat history" },
+    { id: "broadcasts", icon: Megaphone, label: "Broadcasts", detail: "Manage lists and send broadcasts" },
+    { id: "notifications", icon: Bell, label: "Notifications", detail: "Message, group & call tones" },
+    { id: "storage", icon: Database, label: "Storage and data", detail: "Network usage, auto-download" },
+    { id: "accessibility", icon: Accessibility, label: "Accessibility", detail: "Increase contrast, animation" },
+    { id: "language", icon: Globe, label: "App language", detail: "English (device's language)" },
+    { id: "help", icon: HelpCircle, label: "Help and feedback", detail: "Help centre, contact us, privacy policy" },
   ];
 
   const renderMainMenu = () => (
     <div className="h-full flex flex-col bg-background">
-      <div className="px-4 py-4 border-b border-border">
-        <h1 className="text-lg font-bold text-foreground">Settings</h1>
+      <div className="px-4 py-4 border-b border-border flex items-center justify-between">
+        <h1 className="text-xl font-bold text-foreground">Settings</h1>
+        <button className="p-2 rounded-full hover:bg-secondary text-muted-foreground mr-1">
+          <Search className="w-5 h-5 transition-transform active:scale-90" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin">
@@ -563,9 +781,8 @@ const SettingsPage = () => {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-foreground">{profile?.name || "User"}</h3>
-              <p className="text-sm text-muted-foreground truncate">{profile?.bio || "Hey there! I'm using ZIVOX"}</p>
-              <p className="text-xs text-muted-foreground">{profile?.email}</p>
+              <h3 className="text-[17px] font-semibold text-foreground leading-tight">{profile?.name || "User"}</h3>
+              <p className="text-[14px] text-muted-foreground truncate mt-0.5">{profile?.bio || "Hey there! I'm using ZIVOX"}</p>
             </div>
             <QrCode className="w-5 h-5 text-muted-foreground flex-shrink-0" />
           </button>
@@ -576,13 +793,27 @@ const SettingsPage = () => {
           <button
             key={section.id}
             onClick={() => openSection(section.id)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-secondary/60 active:bg-secondary/80 transition-colors text-left"
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-secondary/60 active:bg-secondary/80 transition-colors text-left"
           >
-            <section.icon className="w-5 h-5 text-primary flex-shrink-0" />
-            <span className="font-medium text-sm text-foreground flex-1">{section.label}</span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <section.icon className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-medium text-foreground leading-tight">{section.label}</p>
+              <p className="text-[13px] text-muted-foreground mt-0.5">{section.detail}</p>
+            </div>
           </button>
         ))}
+
+        {/* About Section at the bottom */}
+        <button
+          onClick={() => openSection("about")}
+          className="w-full flex items-center gap-4 px-4 py-4 mt-2 hover:bg-secondary/60 active:bg-secondary/80 transition-colors text-left border-t border-border/50"
+        >
+          <Info className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-medium text-foreground">About ZIVOX</p>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Version, legal, licenses</p>
+          </div>
+        </button>
 
         {/* Logout Button */}
         <button
@@ -618,5 +849,69 @@ const SettingsPage = () => {
     </div>
   );
 };
+
+// Reusable components moved outside for stability
+const Toggle = ({ label, value, onChange, description }: { label: string; value: boolean; onChange: (v: boolean) => void; description?: string }) => (
+  <div className="flex items-center justify-between py-3 px-4">
+    <div className="flex-1 min-w-0 mr-3">
+      <span className="text-sm text-foreground">{label}</span>
+      {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+    </div>
+    <button
+      onClick={() => onChange(!value)}
+      className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 ${value ? "bg-primary" : "bg-muted"}`}
+    >
+      <div className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform ${value ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+    </button>
+  </div>
+);
+
+const SelectOption = ({ label, value, options, onChange }: {
+  label: string; value: string; options: { label: string; value: string }[]; onChange: (v: any) => void;
+}) => (
+  <div className="py-3 px-4">
+    <span className="text-sm text-foreground block mb-2.5">{label}</span>
+    <div className="flex flex-col gap-1">
+      {options.map((opt) => (
+        <div
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
+            value === opt.value ? "bg-primary/10" : "hover:bg-secondary/60"
+          }`}
+        >
+          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+            value === opt.value ? "border-primary" : "border-muted-foreground/40"
+          }`}>
+            {value === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+          </div>
+          <span className={`text-sm ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt.label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const MenuItem = ({ icon: Icon, label, onClick, danger, detail }: { icon?: any; label: string; onClick?: () => void; danger?: boolean; detail?: string }) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-4 py-3 px-4 hover:bg-secondary/60 active:bg-secondary/80 transition-colors text-left ${danger ? "text-destructive" : ""}`}
+  >
+    {Icon && <Icon className={`w-5 h-5 flex-shrink-0 ${danger ? "" : "text-muted-foreground"}`} />}
+    <div className="flex-1 min-w-0">
+      <p className={`text-[15px] ${danger ? "" : "text-foreground"}`}>{label}</p>
+      {detail && <p className="text-[13px] text-muted-foreground mt-0.5">{detail}</p>}
+    </div>
+  </button>
+);
+
+const PanelHeader = ({ title, onBack: onBackClick }: { title: string; onBack: () => void }) => (
+  <div className="flex items-center gap-3 px-4 py-4 border-b border-border sticky top-0 bg-background z-10">
+    <button onClick={onBackClick} className="p-1 rounded-lg hover:bg-secondary transition-colors text-muted-foreground">
+      <ArrowLeft className="w-5 h-5" />
+    </button>
+    <h2 className="text-lg font-bold text-foreground">{title}</h2>
+  </div>
+);
 
 export default SettingsPage;

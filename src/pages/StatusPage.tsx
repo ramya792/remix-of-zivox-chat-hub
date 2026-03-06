@@ -46,11 +46,11 @@ const FONT_STYLES = [
 
 const SONGS = [
   { name: "None", url: "" },
-  { name: "Chill Vibes", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { name: "Lo-fi Beat", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { name: "Acoustic", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
-  { name: "Electronic", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { name: "Jazz", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { name: "Butta Bomma", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { name: "Ramuloo Ramulaa", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { name: "Samajavaragamana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { name: "Naatu Naatu", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { name: "Ma Ma Mahesha", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
 ];
 
 interface StoryGroup {
@@ -111,7 +111,7 @@ const StatusPage = () => {
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
-  const STORY_DURATION = 5000;
+  const STORY_DURATION = 7000; // 7 seconds
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
 
@@ -206,8 +206,8 @@ const StatusPage = () => {
     if (status?.songUrl) {
       const audio = new Audio(status.songUrl);
       audio.volume = 0.5;
-      audio.loop = true;
-      audio.play().catch(() => {});
+      audio.loop = false; // Stop when story ends
+      audio.play().catch((err) => console.log("Music play blocked:", err));
       audioRef.current = audio;
     }
     return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };

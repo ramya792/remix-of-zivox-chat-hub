@@ -103,8 +103,11 @@ const ChatWindow = memo(({ onBack }: Props) => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      const enterIsSend = profile?.enterIsSend !== false;
+      if (enterIsSend) {
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
 
@@ -240,9 +243,8 @@ const ChatWindow = memo(({ onBack }: Props) => {
   const isMuted = activeChat.mutedBy?.includes(user?.uid || "");
   const showOnline = otherUser?.onlineStatus && otherUser?.onlineStatusVisible !== false;
   const getStatusText = () => {
-    if (otherUser?.onlineStatusVisible === false) return "";
+    if (otherUser?.onlineStatusVisible === false || otherUser?.lastSeenVisibility === "nobody") return "";
     if (otherUser?.onlineStatus) return "Online";
-    if (otherUser?.lastSeenVisibility === "nobody") return "";
     if (otherUser?.lastSeen) {
       try {
         const d = otherUser.lastSeen?.toDate ? otherUser.lastSeen.toDate() : new Date(otherUser.lastSeen);
@@ -277,11 +279,11 @@ const ChatWindow = memo(({ onBack }: Props) => {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm text-foreground truncate">
+          <h3 className={`font-semibold text-foreground truncate ${fontSize === "large" ? "text-base" : "text-sm"}`}>
             {otherUser?.name || "Unknown"}
             {isMuted && <VolumeX className="inline w-3 h-3 ml-1 text-muted-foreground" />}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className={`text-muted-foreground ${fontSize === "large" ? "text-[14px]" : "text-xs"}`}>
             {getStatusText()}
           </p>
         </div>
@@ -346,6 +348,7 @@ const ChatWindow = memo(({ onBack }: Props) => {
         ref={containerRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4 chat-pattern"
+        style={{ backgroundColor: profile?.wallpaper || "transparent" }}
       >
         {loadingMessages ? (
           <div className="flex items-center justify-center py-12">
@@ -464,7 +467,9 @@ const ChatWindow = memo(({ onBack }: Props) => {
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
                 rows={1}
-                className="w-full px-4 py-2.5 rounded-2xl bg-secondary text-foreground placeholder:text-muted-foreground border-none outline-none text-sm resize-none max-h-32"
+                className={`w-full px-4 py-2.5 rounded-2xl bg-secondary text-foreground placeholder:text-muted-foreground border-none outline-none resize-none max-h-32 ${
+                  fontSize === "large" ? "text-[18px]" : fontSize === "small" ? "text-[12px]" : "text-[14px]"
+                }`}
                 style={{ minHeight: "40px" }}
               />
             </div>

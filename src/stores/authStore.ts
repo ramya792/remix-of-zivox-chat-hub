@@ -14,7 +14,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
-import { profilePicToBase64 } from "@/lib/imageUtils";
+import { profilePicToBase64, wallpaperToBase64 } from "@/lib/imageUtils";
 
 interface UserProfile {
   uid: string;
@@ -52,6 +52,7 @@ interface UserProfile {
   // Appearance
   darkMode?: boolean;
   appLanguage?: string;
+  wallpaper?: string;
 }
 
 interface AuthState {
@@ -66,6 +67,7 @@ interface AuthState {
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<Omit<UserProfile, "uid" | "email">>) => Promise<void>;
   updateProfilePic: (file: File) => Promise<void>;
+  updateWallpaper: (file: File | string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   clearError: () => void;
@@ -86,6 +88,7 @@ const createOrUpdateUser = async (user: User, name?: string) => {
       lastSeen: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      wallpaper: "#0b141a", // Default dark WhatsApp-like background
     });
   } else {
     await setDoc(userRef, { onlineStatus: true, lastSeen: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
@@ -142,6 +145,25 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     await signOut(auth);
     set({ user: null, profile: null });
+  },
+
+  updateWallpaper: async (fileOrColor) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    set({ loading: true, error: null });
+    try {
+      let wallpaper = fileOrColor;
+      if (fileOrColor instanceof File) {
+        wallpaper = await wallpaperToBase64(fileOrColor);
+      }
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { wallpaper, updatedAt: serverTimestamp() });
+      const { profile } = get();
+      if (profile) set({ profile: { ...profile, wallpaper } as UserProfile });
+      set({ loading: false });
+    } catch (e: any) {
+      set({ error: e.message, loading: false });
+    }
   },
 
   updateUserProfile: async (data) => {

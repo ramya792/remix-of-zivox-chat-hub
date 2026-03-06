@@ -109,3 +109,7 @@ export const chatImageToBase64 = (file: File): Promise<string> =>
 /** Status image: medium size */
 export const statusImageToBase64 = (file: File): Promise<string> =>
   imageToBase64(file, 800, 800, 0.65);
+
+/** Wallpaper: high quality but compressed */
+export const wallpaperToBase64 = (file: File): Promise<string> =>
+  imageToBase64(file, 1280, 1280, 0.7);
