@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 type PrivacyOption = "everyone" | "contacts" | "nobody";
-type SectionId = "profile" | "account" | "privacy" | "avatar" | "lists" | "chats" | "broadcasts" | "notifications" | "storage" | "accessibility" | "language" | "help" | "about" | "tos" | "privacy_policy" | "licenses" | null;
+type SectionId = "profile" | "account" | "privacy" | "avatar" | "lists" | "chats" | "broadcasts" | "notifications" | "storage" | "accessibility" | "language" | "help" | "about" | "tos" | "privacy_policy" | "licenses" | "last_seen" | "profile_pic_privacy" | "about_privacy" | "status_privacy" | "disappearing_messages" | "groups_privacy" | "calls_privacy" | "blocked_contacts" | null;
 
 const SettingsPage = () => {
   const { profile, logout, updateUserProfile, updateProfilePic, changePassword, deleteAccount } = useAuthStore();
@@ -58,6 +58,8 @@ const SettingsPage = () => {
     dataSaver: profile?.dataSaver === true,
     statusVisibility: (profile?.statusVisibility || "everyone") as PrivacyOption,
     statusAutoDelete: profile?.statusAutoDelete !== false,
+    defaultMessageTimer: (profile?.defaultMessageTimer || "off") as "off" | "24h" | "7d" | "90d",
+    silenceUnknownCallers: profile?.silenceUnknownCallers === true,
     darkMode: profile?.darkMode !== false,
     appLanguage: profile?.appLanguage || "English",
     wallpaper: profile?.wallpaper || "#0b141a",
@@ -87,6 +89,8 @@ const SettingsPage = () => {
         dataSaver: profile.dataSaver === true,
         statusVisibility: (profile.statusVisibility || "everyone") as PrivacyOption,
         statusAutoDelete: profile.statusAutoDelete !== false,
+        defaultMessageTimer: (profile.defaultMessageTimer || "off") as "off" | "24h" | "7d" | "90d",
+        silenceUnknownCallers: profile.silenceUnknownCallers === true,
         darkMode: profile.darkMode !== false,
         appLanguage: profile.appLanguage || "English",
         wallpaper: profile.wallpaper || "#0b141a",
@@ -385,15 +389,13 @@ const SettingsPage = () => {
         <div className="px-4 py-3">
           <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">Disappearing messages</p>
         </div>
-        <MenuItem label="Default message timer" detail="Off" />
+        <MenuItem label="Default message timer" detail={settings.defaultMessageTimer === "off" ? "Off" : settings.defaultMessageTimer === "24h" ? "24 hours" : settings.defaultMessageTimer === "7d" ? "7 days" : "90 days"} onClick={() => openSection("disappearing_messages")} />
         <p className="px-4 text-[12px] text-muted-foreground pb-3 leading-snug">Start new chats with disappearing messages set to your timer</p>
         
         <div className="border-t border-border mt-2" />
-        <MenuItem label="Groups" detail="Everyone" />
-        <MenuItem label="Live location" detail="None" />
-        <MenuItem label="Calls" detail="Silence unknown callers" />
-        <MenuItem label="Blocked contacts" detail="None" />
-        <MenuItem label="App lock" detail="Disabled" />
+        <MenuItem label="Groups" detail={settings.groupsAddMe === "everyone" ? "Everyone" : settings.groupsAddMe === "contacts" ? "My contacts" : "Nobody"} onClick={() => openSection("groups_privacy")} />
+        <MenuItem label="Calls" detail={settings.silenceUnknownCallers ? "Silence unknown callers" : "Off"} onClick={() => openSection("calls_privacy")} />
+        <MenuItem label="Blocked contacts" detail="None" onClick={() => openSection("blocked_contacts")} />
       </div>
     </div>
   );
@@ -513,6 +515,76 @@ const SettingsPage = () => {
     </div>
   );
 
+  const renderDisappearingMessages = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Default message timer" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] text-muted-foreground leading-relaxed">Start new individual chats with a disappearing message timer. The timer will only apply to new messages after it is set.</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.defaultMessageTimer} 
+          options={[
+            {label: "Off", value: "off"},
+            {label: "24 hours", value: "24h"},
+            {label: "7 days", value: "7d"},
+            {label: "90 days", value: "90d"}
+          ]} 
+          onChange={(v) => updateSetting("defaultMessageTimer", "defaultMessageTimer", v)} 
+        />
+      </div>
+    </div>
+  );
+
+  const renderGroupsPrivacy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Groups" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="px-4 py-4">
+          <p className="text-[13px] font-semibold text-primary uppercase tracking-wider">Who can add me to groups</p>
+        </div>
+        <SelectOption 
+          label="" 
+          value={settings.groupsAddMe} 
+          options={[
+            {label: "Everyone", value: "everyone"},
+            {label: "My contacts", value: "contacts"},
+            {label: "My contacts except...", value: "except"}
+          ]} 
+          onChange={(v) => updateSetting("groupsAddMe", "groupsAddMe", v)} 
+        />
+      </div>
+    </div>
+  );
+
+  const renderCallsPrivacy = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Calls" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <Toggle 
+          label="Silence unknown callers" 
+          value={settings.silenceUnknownCallers} 
+          onChange={(v) => updateSetting("silenceUnknownCallers", "silenceUnknownCallers", v)} 
+          description="Calls from unknown numbers will be silenced. They will still appear in the Calls tab and notifications." 
+        />
+      </div>
+    </div>
+  );
+
+  const renderBlockedContacts = () => (
+    <div className="flex flex-col h-full bg-background">
+      <PanelHeader title="Blocked contacts" onBack={() => openSection("privacy")} />
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="flex flex-col items-center justify-center py-16 px-8">
+          <Shield className="w-12 h-12 text-muted-foreground/40 mb-4" />
+          <p className="text-muted-foreground text-center text-sm">No blocked contacts</p>
+          <p className="text-muted-foreground/60 text-center text-xs mt-2">Blocked contacts will not be able to call you or send you messages.</p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderSecurity = () => (
     <div className="flex flex-col h-full">
       <PanelHeader title="Security" onBack={goBack} />
@@ -534,32 +606,11 @@ const SettingsPage = () => {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <Toggle label="Enter is send" value={settings.enterIsSend} onChange={(v) => updateSetting("enterIsSend", "enterIsSend", v)} description="Use Enter key to send messages" />
         <div className="border-t border-border" />
-        <SelectOption label="Font size" value={settings.fontSize} options={[{label:"Small",value:"small"},{label:"Medium",value:"medium"},{label:"Large",value:"large"}]} onChange={(v) => updateSetting("fontSize", "fontSize", v)} />
-        <div className="border-t border-border" />
-        <SelectOption 
-          label="Chat wallpaper" 
-          value={settings.wallpaper} 
-          options={[
-            {label:"Default Dark", value:"#0b141a"}, 
-            {label:"Teal Green", value:"#075e54"}, 
-            {label:"Deep Blue", value:"#054d80"},
-            {label:"Dark Grey", value:"#1a1d21"},
-            {label:"Burgundy", value:"#4a0e0e"}
-          ]} 
-          onChange={(v) => updateSetting("wallpaper", "wallpaper", v)} 
-        />
-        <div className="px-4 pb-4">
-          <input ref={wallpaperRef} type="file" accept="image/*" onChange={handleWallpaperSelect} className="hidden" />
-          <button 
-            onClick={() => wallpaperRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-primary font-medium text-sm transition-colors border border-border/50"
-          >
-            <Image className="w-4 h-4" /> Choose from Gallery
-          </button>
-        </div>
         <SelectOption label="Archived chats" value={settings.archivedChats} options={[{label:"Keep archived",value:"keep"},{label:"Auto unarchive",value:"auto"}]} onChange={(v) => updateSetting("archivedChats", "archivedChats", v)} />
         <div className="border-t border-border" />
         <MenuItem icon={Database} label="Chat backup" />
+        <div className="border-t border-border" />
+        <p className="px-4 py-3 text-xs text-muted-foreground">To change chat wallpaper, open a chat and tap the menu (⋮) → Wallpaper.</p>
       </div>
     </div>
   );
@@ -724,6 +775,10 @@ const SettingsPage = () => {
       case "profile_pic_privacy": return renderProfilePicPrivacy();
       case "about_privacy": return renderAboutPrivacy();
       case "status_privacy": return renderStatusPrivacy();
+      case "disappearing_messages": return renderDisappearingMessages();
+      case "groups_privacy": return renderGroupsPrivacy();
+      case "calls_privacy": return renderCallsPrivacy();
+      case "blocked_contacts": return renderBlockedContacts();
       case "avatar": return <div className="flex flex-col h-full"><PanelHeader title="Avatar" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Avatar settings coming soon...</div></div>;
       case "lists": return <div className="flex flex-col h-full"><PanelHeader title="Lists" onBack={goBack} /><div className="p-8 text-center text-muted-foreground">Manage your people and groups here...</div></div>;
       case "chats": return renderChats();

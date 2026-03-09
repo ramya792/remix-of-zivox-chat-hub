@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, memo, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { useChatStore, type Message } from "@/stores/chatStore";
-import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Mic, Check, CheckCheck, X, Square, UserCircle, Search as SearchIcon, Volume2, VolumeX, Ban, Trash2, Mail } from "lucide-react";
+import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Mic, Check, CheckCheck, X, Square, UserCircle, Search as SearchIcon, Volume2, VolumeX, Ban, Trash2, Mail, Palette, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import EmojiPicker, { Theme } from "emoji-picker-react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, doc as firestoreDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatDistanceToNow } from "date-fns";
 
@@ -17,7 +17,7 @@ interface Props {
 const ChatWindow = memo(({ onBack }: Props) => {
   const { user, profile } = useAuthStore();
   const fontSize = profile?.fontSize || "medium";
-  const { activeChat, messages, sendMessage, sendMediaMessage, loadingMessages, loadMoreMessages, hasMoreMessages, muteChat, clearChat } = useChatStore();
+  const { activeChat, messages, sendMessage, sendMediaMessage, loadingMessages, loadMoreMessages, hasMoreMessages, muteChat, clearChat, setChatWallpaper } = useChatStore();
   const [text, setText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,6 +39,9 @@ const ChatWindow = memo(({ onBack }: Props) => {
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [chatWallpaper, setChatWallpaperLocal] = useState<string>("#0b141a");
+  const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
   const handleCall = useCallback(async (type: "voice" | "video") => {
     if (!user || !activeChat?.otherUser || callingRef.current) return;
@@ -64,6 +67,19 @@ const ChatWindow = memo(({ onBack }: Props) => {
       setTimeout(() => { callingRef.current = false; }, 2000);
     }
   }, [user, profile, activeChat]);
+
+  // Subscribe to per-chat wallpaper in real-time
+  useEffect(() => {
+    if (!activeChat?.id || !user?.uid) return;
+    const unsub = onSnapshot(firestoreDoc(db, "chats", activeChat.id), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const wp = data.wallpapers?.[user.uid] || "#0b141a";
+        setChatWallpaperLocal(wp);
+      }
+    });
+    return () => unsub();
+  }, [activeChat?.id, user?.uid]);
 
   // Close menu on click outside
   useEffect(() => {
@@ -131,11 +147,13 @@ const ChatWindow = memo(({ onBack }: Props) => {
     if (!file || !activeChat || !user) return;
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
-    if (!isImage && !isVideo) return;
+    const isDocument = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    if (!isImage && !isVideo && !isDocument) return;
     setUploading(true);
     setUploadError("");
     try {
-      await sendMediaMessage(activeChat.id, user.uid, file, isImage ? "image" : "video");
+      const mediaType = isImage ? "image" : isVideo ? "video" : "document";
+      await sendMediaMessage(activeChat.id, user.uid, file, mediaType);
       setAutoScroll(true);
     } catch (err: any) {
       console.error("Upload failed:", err);
@@ -227,6 +245,30 @@ const ChatWindow = memo(({ onBack }: Props) => {
     try { await muteChat(activeChat.id, user.uid, !muted); } catch (e) { console.error("Mute error:", e); }
   };
   const handleClearChat = () => { setShowMenu(false); setShowClearConfirm(true); };
+  const handleWallpaper = () => { setShowMenu(false); setShowWallpaperPicker(true); };
+  const handleWallpaperColor = async (color: string) => {
+    if (!activeChat || !user) return;
+    try { await setChatWallpaper(activeChat.id, user.uid, color); } catch (e) { console.error("Wallpaper error:", e); }
+    setShowWallpaperPicker(false);
+  };
+  const handleWallpaperImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChat || !user) return;
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      // Limit to ~500KB for Firestore
+      if (dataUrl.length > 500_000) {
+        alert("Image too large. Please choose a smaller image.");
+        return;
+      }
+      try { await setChatWallpaper(activeChat.id, user.uid, dataUrl); } catch (e) { console.error("Wallpaper error:", e); }
+      setShowWallpaperPicker(false);
+    };
+    reader.readAsDataURL(file);
+    if (wallpaperInputRef.current) wallpaperInputRef.current.value = "";
+  };
   const confirmClearChat = async () => {
     if (!activeChat) return;
     try { await clearChat(activeChat.id); } catch (e) { console.error("Clear chat error:", e); }
@@ -248,6 +290,7 @@ const ChatWindow = memo(({ onBack }: Props) => {
     if (otherUser?.lastSeen) {
       try {
         const d = otherUser.lastSeen?.toDate ? otherUser.lastSeen.toDate() : new Date(otherUser.lastSeen);
+        if (Date.now() - d.getTime() > 20 * 24 * 60 * 60 * 1000) return "Offline";
         return `Last seen ${formatDistanceToNow(d, { addSuffix: true })}`;
       } catch { return "Offline"; }
     }
@@ -320,6 +363,9 @@ const ChatWindow = memo(({ onBack }: Props) => {
                   <button onClick={() => setShowMenu(false)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/60 text-left text-sm text-foreground">
                     <Ban className="w-4 h-4 text-muted-foreground" /> Block user
                   </button>
+                  <button onClick={handleWallpaper} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/60 text-left text-sm text-foreground">
+                    <Palette className="w-4 h-4 text-muted-foreground" /> Wallpaper
+                  </button>
                   <div className="border-t border-border my-1" />
                   <button onClick={handleClearChat} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/60 text-left text-sm text-destructive">
                     <Trash2 className="w-4 h-4" /> Clear chat
@@ -348,7 +394,7 @@ const ChatWindow = memo(({ onBack }: Props) => {
         ref={containerRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4 chat-pattern"
-        style={{ backgroundColor: profile?.wallpaper || "transparent" }}
+        style={{ backgroundColor: chatWallpaper.startsWith("data:") ? undefined : chatWallpaper, backgroundImage: chatWallpaper.startsWith("data:") ? `url(${chatWallpaper})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}
       >
         {loadingMessages ? (
           <div className="flex items-center justify-center py-12">
@@ -421,7 +467,7 @@ const ChatWindow = memo(({ onBack }: Props) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*,video/*,.pdf,application/pdf"
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -573,6 +619,67 @@ const ChatWindow = memo(({ onBack }: Props) => {
               <div className="flex gap-3">
                 <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground text-sm font-medium hover:opacity-90">Cancel</button>
                 <button onClick={confirmClearChat} className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90">Clear</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Per-Chat Wallpaper Picker */}
+      <AnimatePresence>
+        {showWallpaperPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm"
+            onClick={() => setShowWallpaperPicker(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "tween", duration: 0.2 }}
+              className="bg-card rounded-t-2xl border border-border w-full max-w-md shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h3 className="text-base font-bold text-foreground">Chat Wallpaper</h3>
+                <button onClick={() => setShowWallpaperPicker(false)} className="p-1 rounded-lg hover:bg-secondary text-muted-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Solid Colors</p>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { label: "Default Dark", color: "#0b141a" },
+                    { label: "Teal", color: "#075e54" },
+                    { label: "Deep Blue", color: "#054d80" },
+                    { label: "Dark Grey", color: "#1a1d21" },
+                    { label: "Burgundy", color: "#4a0e0e" },
+                    { label: "Forest", color: "#1a3a1a" },
+                    { label: "Navy", color: "#0a1628" },
+                    { label: "Charcoal", color: "#2d2d2d" },
+                  ].map((wp) => (
+                    <button
+                      key={wp.color}
+                      onClick={() => handleWallpaperColor(wp.color)}
+                      className={`w-12 h-12 rounded-xl border-2 transition-all ${chatWallpaper === wp.color ? "border-primary scale-110" : "border-border hover:border-muted-foreground"}`}
+                      style={{ backgroundColor: wp.color }}
+                      title={wp.label}
+                    />
+                  ))}
+                </div>
+                <div className="border-t border-border pt-3">
+                  <input ref={wallpaperInputRef} type="file" accept="image/*" onChange={handleWallpaperImage} className="hidden" />
+                  <button
+                    onClick={() => wallpaperInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-primary font-medium text-sm transition-colors border border-border/50"
+                  >
+                    <ImageIcon className="w-4 h-4" /> Choose from Gallery
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

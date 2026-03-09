@@ -206,7 +206,7 @@ const ChatPage = () => {
         )}
       </AnimatePresence>
 
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      {!activeChat && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </div>
   );
 };

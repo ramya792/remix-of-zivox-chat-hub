@@ -49,6 +49,10 @@ interface UserProfile {
   // Status settings
   statusVisibility?: "everyone" | "contacts" | "nobody";
   statusAutoDelete?: boolean;
+  // Disappearing messages
+  defaultMessageTimer?: "off" | "24h" | "7d" | "90d";
+  // Calls
+  silenceUnknownCallers?: boolean;
   // Appearance
   darkMode?: boolean;
   appLanguage?: string;
@@ -97,7 +101,7 @@ const createOrUpdateUser = async (user: User, name?: string) => {
   return updated.data() as UserProfile;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   loading: false,

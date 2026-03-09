@@ -1,7 +1,7 @@
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { useChatStore, type Message } from "@/stores/chatStore";
 import { useAuthStore } from "@/stores/authStore";
-import { Check, CheckCheck, MoreHorizontal, Pencil, Trash2, Reply, Copy, Play } from "lucide-react";
+import { Check, CheckCheck, MoreHorizontal, Pencil, Trash2, Reply, Copy, Play, FileText, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
@@ -16,8 +16,26 @@ const emojis = ["❤️", "😂", "😮", "😢", "🙏", "👍"];
 const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
   const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [canEditDelete, setCanEditDelete] = useState(true);
   const { deleteMessage, editMessage, addReaction } = useChatStore();
   const { user } = useAuthStore();
+
+  // Only allow edit/delete within 1 minute of sending
+  useEffect(() => {
+    if (!message.timestamp) return;
+    try {
+      const msgTime = message.timestamp?.toDate ? message.timestamp.toDate() : new Date(message.timestamp);
+      const diff = Date.now() - msgTime.getTime();
+      if (diff > 60_000) {
+        setCanEditDelete(false);
+      } else {
+        const timer = setTimeout(() => setCanEditDelete(false), 60_000 - diff);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      setCanEditDelete(false);
+    }
+  }, [message.timestamp]);
 
   if (message.deletedForEveryone) {
     return (
@@ -47,9 +65,13 @@ const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
       animate={{ opacity: 1, y: 0 }}
       className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-1 group relative`}
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { setShowActions(false); setShowReactions(false); }}
+      onMouseLeave={() => { if (!showReactions) { setShowActions(false); } }}
     >
-      <div className="max-w-[80%] md:max-w-[65%] relative">
+      {/* Invisible backdrop to close reactions when clicking outside */}
+      {showReactions && (
+        <div className="fixed inset-0 z-0" onClick={() => { setShowReactions(false); setShowActions(false); }} />
+      )}
+      <div className="max-w-[80%] md:max-w-[65%] relative z-[1]">
         <div
           className={`px-3.5 py-2 leading-relaxed ${
             fontSize === "large" ? "text-[18px]" : fontSize === "small" ? "text-[12px]" : "text-[14px]"
@@ -83,6 +105,24 @@ const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
             <div className="mb-1 min-w-[200px]">
               <audio src={message.mediaUrl} controls className="w-full h-8" />
             </div>
+          )}
+          {message.mediaUrl && message.mediaType === "document" && (
+            <a
+              href={message.mediaUrl}
+              download={(message as any).fileName || "document.pdf"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-1 flex items-center gap-3 bg-black/10 rounded-xl px-3 py-2.5 min-w-[200px] hover:bg-black/20 transition-colors cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{(message as any).fileName || "Document"}</p>
+                <p className="text-[10px] opacity-60">PDF</p>
+              </div>
+              <Download className="w-4 h-4 opacity-60 flex-shrink-0" />
+            </a>
           )}
           {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
           <div className={`flex items-center gap-1 mt-1 ${isOwn ? "justify-end" : "justify-start"}`}>
@@ -124,7 +164,7 @@ const MessageBubble = memo(({ message, isOwn, chatId, fontSize }: Props) => {
             >
               😊
             </button>
-            {isOwn && (
+            {isOwn && canEditDelete && (
               <>
                 <button
                   onClick={() => {

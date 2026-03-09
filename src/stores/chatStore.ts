@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useAuthStore } from "@/stores/authStore";
 import {
   collection,
   query,
@@ -78,7 +79,7 @@ interface ChatState {
   setActiveChat: (chat: Chat | null) => void;
   subscribeMessages: (chatId: string) => void;
   sendMessage: (chatId: string, senderId: string, text: string) => Promise<void>;
-  sendMediaMessage: (chatId: string, senderId: string, file: File, mediaType: "image" | "video" | "audio") => Promise<void>;
+  sendMediaMessage: (chatId: string, senderId: string, file: File, mediaType: "image" | "video" | "audio" | "document") => Promise<void>;
   loadMoreMessages: (chatId: string) => Promise<void>;
   setTyping: (chatId: string, uid: string, isTyping: boolean) => void;
   startChat: (currentUid: string, otherUid: string) => Promise<string>;
@@ -86,11 +87,53 @@ interface ChatState {
   editMessage: (chatId: string, messageId: string, newText: string) => Promise<void>;
   addReaction: (chatId: string, messageId: string, uid: string, emoji: string) => Promise<void>;
   muteChat: (chatId: string, uid: string, mute: boolean) => Promise<void>;
+  setChatWallpaper: (chatId: string, uid: string, wallpaper: string) => Promise<void>;
   clearChat: (chatId: string) => Promise<void>;
   cleanup: () => void;
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>((set, get) => {
+  // Track per-user presence listeners outside state (non-reactive)
+  let userPresenceUnsubs: Record<string, Unsubscribe> = {};
+
+  const cleanupUserPresence = () => {
+    Object.values(userPresenceUnsubs).forEach((unsub) => unsub());
+    userPresenceUnsubs = {};
+  };
+
+  const subscribeUserPresence = (otherUid: string) => {
+    // Don't resubscribe if already listening
+    if (userPresenceUnsubs[otherUid]) return;
+    userPresenceUnsubs[otherUid] = onSnapshot(doc(db, "users", otherUid), (snap) => {
+      if (!snap.exists()) return;
+      const u = snap.data();
+      const { chats, activeChat } = get();
+      const updatedChats = chats.map((chat) => {
+        if (chat.otherUser?.uid === otherUid) {
+          return {
+            ...chat,
+            otherUser: {
+              ...chat.otherUser,
+              onlineStatus: u.onlineStatus || false,
+              lastSeen: u.lastSeen,
+              name: u.name || chat.otherUser.name,
+              profilePic: u.profilePic || chat.otherUser.profilePic,
+              bio: u.bio || "",
+              lastSeenVisibility: u.lastSeenVisibility || "everyone",
+              onlineStatusVisible: u.onlineStatusVisible !== false,
+            },
+          };
+        }
+        return chat;
+      });
+      const updatedActive = activeChat?.otherUser?.uid === otherUid
+        ? updatedChats.find((c) => c.id === activeChat.id) || activeChat
+        : activeChat;
+      set({ chats: updatedChats, activeChat: updatedActive });
+    });
+  };
+
+  return ({
   chats: [],
   activeChat: null,
   messages: [],
@@ -105,6 +148,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   subscribeChats: (uid) => {
     const prev = get().chatListUnsub;
     if (prev) prev();
+    cleanupUserPresence();
     set({ loadingChats: true });
 
     const q = query(
@@ -131,6 +175,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (chat.type === "private") {
             const otherUid = chat.members.find((m) => m !== uid);
             if (otherUid) {
+              // Set up real-time presence listener for this user
+              subscribeUserPresence(otherUid);
+              // Initial fetch for the chat list
               try {
                 const userSnap = await getDoc(doc(db, "users", otherUid));
                 if (userSnap.exists()) {
@@ -195,10 +242,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const messages: Message[] = snap.docs.map((d) => ({
+      const allMessages: Message[] = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
       })) as Message[];
+
+      // Disappearing messages: check timer from auth store
+      const timer = useAuthStore.getState().profile?.defaultMessageTimer;
+      let messages = allMessages;
+      if (timer && timer !== "off") {
+        const thresholdMs = timer === "24h" ? 86400000 : timer === "7d" ? 604800000 : 7776000000; // 90d
+        const now = Date.now();
+        const expired: string[] = [];
+        messages = allMessages.filter((m) => {
+          try {
+            const t = m.timestamp?.toDate ? m.timestamp.toDate().getTime() : new Date(m.timestamp).getTime();
+            if (now - t > thresholdMs) { expired.push(m.id); return false; }
+          } catch { /* keep message if timestamp invalid */ }
+          return true;
+        });
+        // Delete expired messages from Firestore in background
+        if (expired.length > 0) {
+          const b = writeBatch(db);
+          expired.forEach((id) => b.delete(doc(db, "chats", chatId, "messages", id)));
+          b.commit().catch((e) => console.error("Disappearing message cleanup error:", e));
+        }
+      }
+
       const last = snap.docs[snap.docs.length - 1] || null;
       set({
         messages: messages.reverse(),
@@ -247,15 +317,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         throw new Error("Video too large. Max ~3MB.");
       }
       mediaUrl = await fileToBase64Checked(file);
+    } else if (mediaType === "document") {
+      if (file.size > 3 * 1024 * 1024) {
+        throw new Error("Document too large. Max ~3MB.");
+      }
+      mediaUrl = await fileToBase64Checked(file);
     }
 
-    const label = mediaType === "image" ? "📷 Photo" : mediaType === "video" ? "🎥 Video" : "🎤 Voice message";
+    const label = mediaType === "image" ? "📷 Photo" : mediaType === "video" ? "🎥 Video" : mediaType === "document" ? "📄 " + file.name : "🎤 Voice message";
 
     await addDoc(collection(db, "chats", chatId, "messages"), {
       senderId,
       text: "",
       mediaUrl,
       mediaType,
+      ...(mediaType === "document" ? { fileName: file.name } : {}),
       seenBy: [senderId],
       deliveredTo: [senderId],
       reactions: {},
@@ -373,10 +449,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ messages: [] });
   },
 
+  setChatWallpaper: async (chatId, uid, wallpaper) => {
+    const chatRef = doc(db, "chats", chatId);
+    await updateDoc(chatRef, { [`wallpapers.${uid}`]: wallpaper });
+  },
+
   cleanup: () => {
     const { chatListUnsub, messageUnsub } = get();
     if (chatListUnsub) chatListUnsub();
     if (messageUnsub) messageUnsub();
+    cleanupUserPresence();
     set({ chats: [], messages: [], activeChat: null, chatListUnsub: null, messageUnsub: null });
   },
-}));
+})});

@@ -45,12 +45,32 @@ const FONT_STYLES = [
 ];
 
 const SONGS = [
-  { name: "None", url: "" },
-  { name: "Butta Bomma", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { name: "Ramuloo Ramulaa", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { name: "Samajavaragamana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
-  { name: "Naatu Naatu", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { name: "Ma Ma Mahesha", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
+  { name: "None", url: "", category: "" },
+  // Romantic
+  { name: "Butta Bomma", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", category: "Romantic" },
+  { name: "Ramuloo Ramulaa", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", category: "Romantic" },
+  { name: "Samajavaragamana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", category: "Romantic" },
+  { name: "Inkem Inkem", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", category: "Romantic" },
+  { name: "Srivalli", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", category: "Romantic" },
+  // Energetic
+  { name: "Naatu Naatu", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", category: "Energetic" },
+  { name: "Oo Antava", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", category: "Energetic" },
+  { name: "Arabic Kuthu", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", category: "Energetic" },
+  { name: "Jigelu Rani", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", category: "Energetic" },
+  { name: "Ma Ma Mahesha", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", category: "Energetic" },
+  // Chill / Melody
+  { name: "Kushi Theme", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", category: "Chill" },
+  { name: "Sid Sriram Vibe", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", category: "Chill" },
+  { name: "Lo-Fi Beats", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", category: "Chill" },
+  { name: "Soft Piano", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", category: "Chill" },
+  { name: "Dreamy Night", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", category: "Chill" },
+  // Devotional / Spiritual
+  { name: "Om Namah Shivaya", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", category: "Devotional" },
+  { name: "Peaceful Mantra", url: "https://upload.wikimedia.org/wikipedia/commons/2/21/Adeste_Fideles_%28Orchestre_Militaire_Belge%29.ogg", category: "Devotional" },
+  // Fun / Trending
+  { name: "EDM Drop", url: "https://upload.wikimedia.org/wikipedia/commons/b/bd/Rondo_Alla_Turca.ogg", category: "Trending" },
+  { name: "Hip Hop Beat", url: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Ludwig_van_Beethoven_-_symphony_no._5_in_c_minor%2C_op._67_-_i._allegro_con_brio.ogg", category: "Trending" },
+  { name: "Trap Vibes", url: "https://upload.wikimedia.org/wikipedia/commons/6/6d/Good_Morning.ogg", category: "Trending" },
 ];
 
 interface StoryGroup {
@@ -203,12 +223,17 @@ const StatusPage = () => {
     if (activeGroupIdx < 0) return;
     const group = storyGroups[activeGroupIdx];
     const status = group?.statuses[activeStoryIdx] as any;
-    if (status?.songUrl) {
-      const audio = new Audio(status.songUrl);
-      audio.volume = 0.5;
-      audio.loop = false; // Stop when story ends
-      audio.play().catch((err) => console.log("Music play blocked:", err));
-      audioRef.current = audio;
+    if (status?.songName) {
+      // Try to find the URL from the SONGS list by name (in case stored URL is broken)
+      const matchedSong = SONGS.find((s) => s.name === status.songName);
+      const url = matchedSong?.url || status.songUrl;
+      if (url) {
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        audio.loop = false;
+        audio.play().catch((err) => console.log("Music play blocked:", err));
+        audioRef.current = audio;
+      }
     }
     return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
   }, [activeGroupIdx, activeStoryIdx, storyGroups]);
@@ -478,16 +503,37 @@ const StatusPage = () => {
                   {showSongPicker && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-4">
                       <p className="text-xs text-muted-foreground mb-2">Add background music</p>
-                      <div className="space-y-1">
-                        {SONGS.map((s, i) => (
-                          <label key={s.name} onClick={() => setSelectedSong(i)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${selectedSong === i ? "bg-primary/10" : "hover:bg-secondary/60"}`}>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedSong === i ? "border-primary" : "border-muted-foreground/40"}`}>
-                              {selectedSong === i && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                      <div className="space-y-1 max-h-[250px] overflow-y-auto scrollbar-thin">
+                        {/* None option */}
+                        <label onClick={() => setSelectedSong(0)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${selectedSong === 0 ? "bg-primary/10" : "hover:bg-secondary/60"}`}>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedSong === 0 ? "border-primary" : "border-muted-foreground/40"}`}>
+                            {selectedSong === 0 && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                          </div>
+                          <Music className={`w-4 h-4 ${selectedSong === 0 ? "text-primary" : "text-muted-foreground"}`} />
+                          <span className={`text-sm ${selectedSong === 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>None</span>
+                        </label>
+                        {/* Grouped songs */}
+                        {["Romantic", "Energetic", "Chill", "Devotional", "Trending"].map((cat) => {
+                          const catSongs = SONGS.filter((s) => s.category === cat);
+                          if (catSongs.length === 0) return null;
+                          return (
+                            <div key={cat}>
+                              <p className="text-[11px] font-semibold text-primary uppercase tracking-wider px-3 pt-2 pb-1">{cat}</p>
+                              {catSongs.map((s) => {
+                                const idx = SONGS.indexOf(s);
+                                return (
+                                  <label key={s.name} onClick={() => setSelectedSong(idx)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${selectedSong === idx ? "bg-primary/10" : "hover:bg-secondary/60"}`}>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedSong === idx ? "border-primary" : "border-muted-foreground/40"}`}>
+                                      {selectedSong === idx && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <Music className={`w-4 h-4 ${selectedSong === idx ? "text-primary" : "text-muted-foreground"}`} />
+                                    <span className={`text-sm ${selectedSong === idx ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s.name}</span>
+                                  </label>
+                                );
+                              })}
                             </div>
-                            <Music className={`w-4 h-4 ${selectedSong === i ? "text-primary" : "text-muted-foreground"}`} />
-                            <span className={`text-sm ${selectedSong === i ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s.name}</span>
-                          </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     </motion.div>
                   )}
@@ -525,49 +571,42 @@ const StatusPage = () => {
       <AnimatePresence>
         {activeGroupIdx >= 0 && currentGroup && currentStory && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="fixed inset-0 z-[60] bg-black flex flex-col select-none">
-            {/* Progress bars */}
-            <div className="flex gap-[3px] px-2 pt-2 pb-1 z-20">
-              {currentGroup.statuses.map((_, i) => (
-                <div key={i} className="flex-1 h-[2.5px] bg-white/25 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full" style={{ width: i < activeStoryIdx ? "100%" : i === activeStoryIdx ? `${Math.min(progress, 100)}%` : "0%", transition: "none" }} />
+            {/* Top overlay with progress + header */}
+            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/70 via-black/30 to-transparent pb-8">
+              {/* Progress bars */}
+              <div className="flex gap-[3px] px-2 pt-2 pb-1">
+                {currentGroup.statuses.map((_, i) => (
+                  <div key={i} className="flex-1 h-[2.5px] bg-white/25 rounded-full overflow-hidden">
+                    <div className="h-full bg-white rounded-full" style={{ width: i < activeStoryIdx ? "100%" : i === activeStoryIdx ? `${Math.min(progress, 100)}%` : "0%", transition: "none" }} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Header */}
+              <div className="flex items-center gap-3 px-3 py-2">
+                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {currentGroup.userPic ? <img src={currentGroup.userPic} alt="" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-sm">{currentGroup.userName.charAt(0).toUpperCase()}</span>}
                 </div>
-              ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-white text-sm font-semibold">{currentGroup.uid === user?.uid ? "My Status" : currentGroup.userName}</p>
+                    {(currentStory as any).songName && (
+                      <span className="flex items-center gap-1 text-white/50 text-xs"><Music className="w-3 h-3" />{(currentStory as any).songName}</span>
+                    )}
+                  </div>
+                  <p className="text-white/50 text-xs">{formatTime(currentStory.createdAt)}</p>
+                </div>
+                {currentStory.uid === user?.uid && (
+                  <>
+                    <div className="flex items-center gap-1 text-white/60 mr-1"><Eye className="w-4 h-4" /><span className="text-xs">{currentStory.viewedBy?.length || 0}</span></div>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteStatus(currentStory.id); goNext(); }} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70"><Trash2 className="w-5 h-5" /></button>
+                  </>
+                )}
+                <button onClick={(e) => { e.stopPropagation(); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } closeStories(); }} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70"><X className="w-5 h-5" /></button>
+              </div>
             </div>
 
-            {/* Header */}
-            <div className="flex items-center gap-3 px-3 py-2 z-20">
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {currentGroup.userPic ? <img src={currentGroup.userPic} alt="" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-sm">{currentGroup.userName.charAt(0).toUpperCase()}</span>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-white text-sm font-semibold">{currentGroup.uid === user?.uid ? "My Status" : currentGroup.userName}</p>
-                  {(currentStory as any).songName && (
-                    <span className="flex items-center gap-1 text-white/50 text-xs"><Music className="w-3 h-3" />{(currentStory as any).songName}</span>
-                  )}
-                </div>
-                <p className="text-white/50 text-xs">{formatTime(currentStory.createdAt)}</p>
-              </div>
-              {currentStory.uid === user?.uid && (
-                <>
-                  <div className="flex items-center gap-1 text-white/60 mr-1"><Eye className="w-4 h-4" /><span className="text-xs">{currentStory.viewedBy?.length || 0}</span></div>
-                  <button onClick={(e) => { e.stopPropagation(); handleDeleteStatus(currentStory.id); goNext(); }} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70"><Trash2 className="w-5 h-5" /></button>
-                </>
-              )}
-              <button onClick={(e) => { e.stopPropagation(); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } closeStories(); }} className="p-1.5 rounded-lg hover:bg-white/10 text-white/70"><X className="w-5 h-5" /></button>
-            </div>
-
-            {/* Song badge */}
-            {(currentStory as any).songName && (
-              <div className="flex items-center gap-2 px-4 z-20">
-                <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-full px-3 py-1">
-                  <Music className="w-3.5 h-3.5 text-white animate-pulse" />
-                  <span className="text-white/80 text-xs font-medium">{(currentStory as any).songName}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Content */}
+            {/* Content - full screen */}
             <div
               className={`flex-1 flex items-center justify-center relative ${currentStory.imageUrl ? "bg-black" : currentStory.backgroundColor}`}
               onClick={handleStoryTap}
@@ -578,7 +617,7 @@ const StatusPage = () => {
             >
               {currentStory.imageUrl ? (
                 <div className="flex flex-col items-center w-full h-full justify-center relative">
-                  <img src={currentStory.imageUrl} alt="" className="w-full h-full object-contain" draggable={false} style={{ maxHeight: 'calc(100vh - 100px)' }} />
+                  <img src={currentStory.imageUrl} alt="" className="w-full h-full object-contain" draggable={false} />
                   {currentStory.text && (
                     <p
                       className={`absolute bottom-8 left-0 right-0 text-lg font-medium text-center px-6 drop-shadow-lg bg-black/30 py-3 ${getFontClass(currentStory.fontStyle)}`}
@@ -596,6 +635,16 @@ const StatusPage = () => {
                   >
                     {currentStory.text}
                   </p>
+                </div>
+              )}
+
+              {/* Song badge - bottom overlay */}
+              {(currentStory as any).songName && (
+                <div className="absolute bottom-4 left-4 z-20">
+                  <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5">
+                    <Music className="w-3.5 h-3.5 text-white animate-pulse" />
+                    <span className="text-white/90 text-xs font-medium">{(currentStory as any).songName}</span>
+                  </div>
                 </div>
               )}
             </div>
